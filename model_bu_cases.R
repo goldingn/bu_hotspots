@@ -31,7 +31,6 @@
 # So we want a simple model to predict BU incidence on map, and therefore
 # compute the expected number of cases at meshblock level.
 
-
 # step 1: load data
 
 # load in possum abundance map
@@ -54,78 +53,227 @@ meshblock_incidence <- prep_meshblock_incidence(cases, meshblocks)
 
 # step 2: prepare data for modelling
 
+positive_scats <- rt_scat_positivity %>%
+  filter(mu_positive)
+
+
+# remove any meshblock (or scat) datapoint that is more than 1km from the
+# nearest other type of datapoint (drops 2 cases, no scats)
+cutoff_distance <- 1
+data_filtered <- filter_by_distance(
+  cutoff_distance = cutoff_distance,
+  meshblocks = meshblock_incidence,
+  scats = rt_scat_positivity,
+)
+
+meshblock_incidence <- meshblock_incidence %>%
+  filter_by_distance(
+    cutoff_distance,
+    positive_scats
+  )
+
+rt_scat_positivity <- rt_scat_positivity %>%
+  filter_by_distance(
+    cutoff_distance,
+    positive_scats
+  )
+
+# 60 cases left in
+sum(meshblock_incidence$cases)
+
 # compute distance matrix d_ij between meshblock locations and possum scat
 # sampling locations, in km
-distance <- sf::st_distance(
-  meshblock_incidence,
-  rt_scat_positivity,
-  which = "Euclidean",
-)
-units(distance) <- "km"
-units(distance) <- NULL
+distance <- get_distance(meshblock_incidence, rt_scat_positivity)
 
 # step 3: define greta model
 
+mu_positivity <- as_data(rt_scat_positivity$mu_positive)
+
 # define a vague-ish positive prior on the distance decay, with most mass at 0
 # (slightly favouring shorter decays)
-sigma <- normal(0, 10, truncation = c(0, Inf))
-# 2 * dnorm(max(distance), 0, 10) # 0.5% chance *a priori* that the sigma spans
-# the entire area
+sigma <- normal(0, cutoff_distance / 2, truncation = c(0, Inf))
+# 2 * (1 - pnorm(cutoff_distance, 0, cutoff_distance / 2))
+# 5% chance *a priori* that the sigma goes beyond the cutoff distance
 
-# define normalised weights
-weights_raw <- exp(-0.5 * (distance / sigma) ^ 2)
-weights <- sweep(weights_raw, 1, rowSums(weights_raw), FUN = "/")
+# do sparse matrix-multiply with distance cutoff for computational efficiency
+keep_idx <- which(distance <= cutoff_distance, arr.ind = TRUE)
+row_idx <- keep_idx[, 1]
+col_idx <- keep_idx[, 2]
+distance_sparse <- distance[keep_idx]
 
-mu_positivity <- as_data(rt_scat_positivity$bu_positive)
+# compute unnoralised weights
+weights_raw_sparse <- exp(-0.5 * (distance_sparse / sigma) ^ 2)
+# normalise them (so prediction does not depend on number of samples nearby)
+weights_raw_sum_sparse <- tapply(weights_raw_sparse, row_idx, FUN = "sum")
+weights_sparse <- weights_raw_sparse / weights_raw_sum_sparse[row_idx]
+# multiply weights by covariate and aggregate
+weighted_positivity_elements_sparse <- weights_sparse * mu_positivity[col_idx]
+weighted_positivity <- tapply(weighted_positivity_elements_sparse, row_idx, FUN = "sum")
 
-weighted_positivity <- weights %*% mu_positivity
+# # confirm this gives the same answer as the matrix-multiply version
+# mask <- distance <= cutoff_distance
+# weights_raw <- exp(-0.5 * (distance / sigma) ^ 2) * mask
+# weights <- sweep(weights_raw, 1, rowSums(weights_raw), FUN = "/")
+# weighted_positivity_dense <- weights %*% mu_positivity
+# diff <- max(abs(weighted_positivity - weighted_positivity_dense))
+# calculate(diff, nsim = 10)
 
-# log-normal scaling parameter on the FOI
-beta <- normal(0, 1)
+# scaling parameter on the FOI
+beta <- normal(0, 1, truncation = c(0, Inf))
 
-eta <- beta * log(weighted_positivity)
-incidence <- exp(eta)
-# cases <- as_data(meshblock_incidence$cases)
-# population <- as_data(meshblock_incidence$pop_1)
+incidence <- beta * weighted_positivity
+expected_cases <- incidence * meshblock_incidence$pop
 
-distribution(meshblock_incidence$cases) <- poisson(incidence * meshblock_incidence$pop)
+distribution(meshblock_incidence$cases) <- poisson(expected_cases)
 
 m <- model(beta, sigma)
 draws <- mcmc(m)
 
+plot(draws)
 
-# calculate(sum(population))
-# 
-mean(meshblock_incidence$cases)
-sim <- calculate(incidence * meshblock_incidence$pop_1,
-                 values = list(
-                   beta = 0.1,
-                   sigma = 1
-                 ),
-                 nsim = 1)[[1]][1, , 1]
-sum(dpois(meshblock_incidence$cases, sim, log = TRUE))
+# get posterior means of the predicted incidence and cases
+incidence_posterior <- calculate(incidence, values = draws, nsim = 1000)[[1]]
+incidence_posterior_mean <- colMeans(incidence_posterior[, , 1])
 
-# calculate(sum(cases))
-# calculate(beta, nsim = 10)
+expected_cases_posterior <- calculate(expected_cases, values = draws, nsim = 1000)[[1]]
+expected_cases_posterior_mean <- colMeans(expected_cases_posterior[, , 1])
 
-n_chains <- 4
-inits <- replicate(n_chains,
-                   initials(
-                     beta = 0.1,
-                     sigma = 1
-                   ),
-                   simplify = FALSE)
-draws <- mcmc(m, initial_values = inits)
+# simulate cases for PPCs and exceedance probabilities
+cases_new <- poisson(expected_cases)
+cases_sim <- calculate(
+  cases_new,
+  values = draws,
+  nsim = 1000
+)[[1]][, , 1]
 
-tmp <- calculate(incidence * population,
-                 values = list(
-                   beta = 0.5,
-                   sigma = 1
-                 ), nsim = 1)[[1]][1, , ]
+p_some_cases <- colMeans(cases_sim > 0)
 
-range(tmp)
 
-str(tmp)
+meshblock_incidence_posterior <- meshblock_incidence %>%
+  mutate(
+    predicted_incidence = incidence_posterior_mean,
+    predicted_cases = expected_cases_posterior_mean,
+    probability_of_cases = p_some_cases
+  )
 
-# compute local force of infection
-# mu_scat_prevalence_i = \sum_{ij}^n mu_scat_pos_j w_{ij}
+
+idx_sim <- sample.int(1000, 1)
+meshblock_incidence_sim <- meshblock_incidence %>%
+  mutate(
+    sim_cases = cases_sim[idx_sim, ],
+  )
+
+meshblock_incidence %>%
+  mutate(
+    incidence = cases / pop
+  ) %>%
+  arrange(incidence) %>%
+  ggplot(
+    aes(
+      colour = incidence
+    )
+  ) +
+  geom_sf() +
+  coord_sf() +
+  scale_colour_distiller(direction = 1) +
+  theme_minimal()
+
+meshblock_incidence_posterior %>%
+  arrange(predicted_incidence) %>%
+  ggplot(
+    aes(
+      colour = predicted_incidence
+    )
+  ) +
+  geom_sf() +
+  coord_sf() +
+  scale_colour_distiller(direction = 1) +
+  theme_minimal()
+
+
+meshblock_incidence %>%
+  mutate(
+    any_cases = as.numeric(cases > 0)
+  ) %>%
+  arrange(any_cases) %>%
+  ggplot(
+    aes(
+      colour = any_cases
+    )
+  ) +
+  geom_sf() +
+  coord_sf() +
+  scale_colour_distiller(direction = 1) +
+  theme_minimal()
+
+meshblock_incidence_sim %>%
+  mutate(
+    sim_any_cases = as.numeric(sim_cases > 0)
+  ) %>%
+  arrange(sim_any_cases) %>%
+  ggplot(
+    aes(
+      colour = sim_any_cases
+    )
+  ) +
+  geom_sf() +
+  coord_sf() +
+  scale_colour_distiller(direction = 1) +
+  theme_minimal()
+
+meshblock_incidence %>%
+  arrange(pop) %>%
+  ggplot(
+    aes(
+      colour = pop
+    )
+  ) +
+  geom_sf() +
+  coord_sf() +
+  scale_colour_distiller(direction = 1) +
+  theme_minimal()
+
+compare <- meshblock_incidence %>%
+  mutate(
+    incidence = cases / pop
+  ) %>%
+  st_drop_geometry() %>%
+  left_join(
+    st_drop_geometry(meshblock_incidence_posterior),
+    by = "meshblock"
+  )
+
+compare %>%
+  ggplot(
+    aes(
+      x = predicted_incidence,
+      y = incidence
+    )
+  ) +
+  geom_point() +
+  geom_abline(slope = 1, intercept = 0) +
+  theme_minimal()
+
+# overall incidence is well-enough calibrated
+compare %>%
+  summarise(
+    across(
+      ends_with("incidence"),
+      sum
+    )
+  )
+
+
+
+dim(cases_sim)
+idx <- which(meshblock_incidence$cases > 1)
+
+library(bayesplot)
+ppc_dens_overlay(y = meshblock_incidence$cases,
+                 yrep = cases_sim)
+
+ppc_ecdf_overlay(y = meshblock_incidence$cases,
+                 yrep = cases_sim)
+
+ppc_dens(y = meshblock_incidence$cases[idx],
+         yrep = cases_sim[, idx])

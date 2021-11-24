@@ -23,7 +23,7 @@ load_scat_positivity <- function() {
         suspected_organism == 2 ~ "brushtail",
         TRUE ~ NA_character_
       ),
-      bu_positive = `cq(is2404)` != "NEG"
+      mu_positive = `cq(is2404)` != "NEG"
     ) %>%
     filter(
       !is.na(date),
@@ -34,10 +34,10 @@ load_scat_positivity <- function() {
       latitude,
       longitude,
       species,
-      bu_positive
+      mu_positive
     ) %>%
     arrange(
-      bu_positive
+      mu_positive
     )
   
 

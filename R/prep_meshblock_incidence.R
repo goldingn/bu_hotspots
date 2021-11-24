@@ -37,8 +37,12 @@ prep_meshblock_incidence <- function(cases, meshblocks) {
       area_sqm = ALBERS_SQM,
       pop = Population,
     ) %>%
+    # keep only those with some population, and area less than 500m x 500m (to
+    # retain spatial precision)
     filter(
-      pop > 0
+      pop > 0,
+      pop <= 200,
+      area_sqm <= 500 ^ 2
     )
   
 }
