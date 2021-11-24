@@ -34,11 +34,14 @@
 
 # step 1: load data
 
+# load in possum abundance map
+possum_density <- load_possum_density()
+
 # load in all scat locations and MU positivity
 scat_positivity <- load_scat_positivity()
 
-# subset to RT scats, and prepare for modelling
-rt_scat_positivity <- prep_rt_scat_positivity(scat_positivity)
+# subset to RT scats, and prepare for modelling, extracting possum densities
+rt_scat_positivity <- prep_rt_scat_positivity(scat_positivity, possum_density)
 
 # load in meshblock coordinates, cropping to peninsula
 meshblocks <- load_meshblocks()
@@ -49,9 +52,7 @@ cases <- load_cases()
 # compute incidence by meshblock
 meshblock_incidence <- prep_meshblock_incidence(cases, meshblocks)
 
+# step 2: prepare data for modelling
 
-# load in RT scat locations and MU positivity
-
-# load in possum abundance map
-
-# pull out MU positivity and possum abundance at scat sampling locations
+# compute distance matrix d_ij between meshblocks locations and possum scat
+# locations

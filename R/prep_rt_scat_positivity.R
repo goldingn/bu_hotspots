@@ -7,7 +7,7 @@
 #' @return
 #' @author Nick Golding
 #' @export
-prep_rt_scat_positivity <- function(scat_positivity) {
+prep_rt_scat_positivity <- function(scat_positivity, possum_density) {
 
   scat_positivity %>%
     filter(
@@ -15,6 +15,19 @@ prep_rt_scat_positivity <- function(scat_positivity) {
     ) %>%
     select(
       -species
+    ) %>%
+    # extract average possum density in a 500m buffer of the point (accounts for
+    # coastal errors in raster edge) with latlongs (safer than reprojecting the
+    # raster)
+    mutate(
+      rt_possum_density = raster::extract(
+        possum_density,
+        select(., longitude, latitude),
+        buffer = 500,
+        small = TRUE,
+        fun = "mean",
+        na.rm = TRUE
+      )
     ) %>%
     # coerce to an sf object
     st_as_sf(
