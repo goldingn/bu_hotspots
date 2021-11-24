@@ -65,3 +65,67 @@ units(distance) <- "km"
 units(distance) <- NULL
 
 # step 3: define greta model
+
+# define a vague-ish positive prior on the distance decay, with most mass at 0
+# (slightly favouring shorter decays)
+sigma <- normal(0, 10, truncation = c(0, Inf))
+# 2 * dnorm(max(distance), 0, 10) # 0.5% chance *a priori* that the sigma spans
+# the entire area
+
+# define normalised weights
+weights_raw <- exp(-0.5 * (distance / sigma) ^ 2)
+weights <- sweep(weights_raw, 1, rowSums(weights_raw), FUN = "/")
+
+mu_positivity <- as_data(rt_scat_positivity$bu_positive)
+
+weighted_positivity <- weights %*% mu_positivity
+
+# log-normal scaling parameter on the FOI
+beta <- normal(0, 1)
+
+eta <- beta * log(weighted_positivity)
+incidence <- exp(eta)
+# cases <- as_data(meshblock_incidence$cases)
+# population <- as_data(meshblock_incidence$pop_1)
+
+distribution(meshblock_incidence$cases) <- poisson(incidence * meshblock_incidence$pop)
+
+m <- model(beta, sigma)
+draws <- mcmc(m)
+
+
+# calculate(sum(population))
+# 
+mean(meshblock_incidence$cases)
+sim <- calculate(incidence * meshblock_incidence$pop_1,
+                 values = list(
+                   beta = 0.1,
+                   sigma = 1
+                 ),
+                 nsim = 1)[[1]][1, , 1]
+sum(dpois(meshblock_incidence$cases, sim, log = TRUE))
+
+# calculate(sum(cases))
+# calculate(beta, nsim = 10)
+
+n_chains <- 4
+inits <- replicate(n_chains,
+                   initials(
+                     beta = 0.1,
+                     sigma = 1
+                   ),
+                   simplify = FALSE)
+draws <- mcmc(m, initial_values = inits)
+
+tmp <- calculate(incidence * population,
+                 values = list(
+                   beta = 0.5,
+                   sigma = 1
+                 ), nsim = 1)[[1]][1, , ]
+
+range(tmp)
+
+str(tmp)
+
+# compute local force of infection
+# mu_scat_prevalence_i = \sum_{ij}^n mu_scat_pos_j w_{ij}
