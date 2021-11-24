@@ -46,7 +46,7 @@ rt_scat_positivity <- prep_rt_scat_positivity(scat_positivity, possum_density)
 # load in meshblock coordinates, cropping to peninsula
 meshblocks <- load_meshblocks()
 
-# load in residential BU cases
+# load in residential BU cases and use 2016 populations
 cases <- load_cases()
 
 # compute incidence by meshblock
@@ -62,6 +62,6 @@ distance <- sf::st_distance(
   which = "Euclidean",
 )
 units(distance) <- "km"
-distance[1:5, 1:5]
+units(distance) <- NULL
 
 # step 3: define greta model

@@ -35,7 +35,10 @@ prep_meshblock_incidence <- function(cases, meshblocks) {
       meshblock = MB_CODE11,
       cases,
       area_sqm = ALBERS_SQM,
-      pop_1 = X2011.censu,
-      pop_2 = X2011.cen_1    
+      pop = Population,
+    ) %>%
+    filter(
+      pop > 0
     )
+  
 }
