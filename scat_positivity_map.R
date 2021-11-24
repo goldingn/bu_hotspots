@@ -5,10 +5,6 @@
 #   st_geometry() %>%
 #   plot()
 
-# project the lat longs
-
-?sf::sf_project
-
 library(readxl)
 positivity <- read_excel("data/20210811_Extract4Nick.xlsx")  %>%
   rename_with(
@@ -157,7 +153,7 @@ coords <- rt_positivity %>%
   ) %>%
   as.matrix()
 
-n_inducing <- 50
+n_inducing <- 100
 coords_inducing <- kmeans(coords, centers = n_inducing)$centers
 
 # GP hyperparameters
@@ -166,13 +162,17 @@ var_spatial <- normal(0, 1, truncation = c(0, Inf))
 len_spatial_both <- c(len_spatial, len_spatial)
 k_spatial <- mat52(lengthscales = len_spatial_both, variance = var_spatial) + bias(10)
 
-# define spatial GP over data
+# evaluate spatial GP at data
 f_spatial <- gp(
   x = coords,
   kernel = k_spatial,
   inducing = coords_inducing
 )
 
+p_positive <- ilogit(f_spatial)
 
+# define likelihood
+distribution(rt_positivity$bu_positive) <- bernoulli(p_positive)
 
-     
+m <- model(len_spatial, var_spatial)
+draws <- mcmc(m, chains = 10, warmup = 500, n_samples = 500)     
