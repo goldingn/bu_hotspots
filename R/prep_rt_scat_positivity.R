@@ -46,8 +46,6 @@ prep_rt_scat_positivity <- function(scat_positivity, possum_density) {
       x = st_coordinates(.)[, 1],
       y = st_coordinates(.)[, 2],
     ) %>%
-    # drop the sf structure
-    st_set_geometry(NULL) %>%
     # standardise the dates and scale the coordinates
     mutate(
       date_num = as.numeric(date - min(date)),

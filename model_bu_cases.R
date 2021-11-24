@@ -54,5 +54,14 @@ meshblock_incidence <- prep_meshblock_incidence(cases, meshblocks)
 
 # step 2: prepare data for modelling
 
-# compute distance matrix d_ij between meshblocks locations and possum scat
-# locations
+# compute distance matrix d_ij between meshblock locations and possum scat
+# sampling locations, in km
+distance <- sf::st_distance(
+  meshblock_incidence,
+  rt_scat_positivity,
+  which = "Euclidean",
+)
+units(distance) <- "km"
+distance[1:5, 1:5]
+
+# step 3: define greta model
