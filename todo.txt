@@ -1,0 +1,10 @@
+get more BU data
+
+add intercept and terms for possums and scats (log-linear)
+
+add dates and date lag woth prior of 5 months - need to split by time to do the temporal PPM? Or some other approximation?
+
+train/test split by time (pair with lagged scat data)
+
+model evaluation (fraction of cases in highest-density region?)
+
