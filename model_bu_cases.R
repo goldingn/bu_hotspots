@@ -2,7 +2,7 @@
 # positivity in possum scat and possum abundance.
 
 # possum abundance multiplied by scat prevalence should be proportional to the
-# number of infected possums at a location, which is proportional ot the
+# number of infected possums at a location, which is proportional to the
 # force-of-infection (FOI) from possums to mosquitos at that location.
 
 # assuming a uniform abundance of mosquitoes within the study area, the
@@ -60,12 +60,6 @@ positive_scats <- rt_scat_positivity %>%
 # remove any meshblock (or scat) datapoint that is more than 1km from the
 # nearest other type of datapoint (drops 2 cases, no scats)
 cutoff_distance <- 1
-data_filtered <- filter_by_distance(
-  cutoff_distance = cutoff_distance,
-  meshblocks = meshblock_incidence,
-  scats = rt_scat_positivity,
-)
-
 meshblock_incidence <- meshblock_incidence %>%
   filter_by_distance(
     cutoff_distance,
@@ -130,6 +124,7 @@ m <- model(beta, sigma)
 draws <- mcmc(m)
 
 plot(draws)
+coda::gelman.diag(draws, autoburnin = FALSE, multivariate = FALSE)
 
 # get posterior means of the predicted incidence and cases
 incidence_posterior <- calculate(incidence, values = draws, nsim = 1000)[[1]]
@@ -148,25 +143,18 @@ cases_sim <- calculate(
 
 p_some_cases <- colMeans(cases_sim > 0)
 
-
 meshblock_incidence_posterior <- meshblock_incidence %>%
   mutate(
     predicted_incidence = incidence_posterior_mean,
     predicted_cases = expected_cases_posterior_mean,
-    probability_of_cases = p_some_cases
+    probability_of_cases = p_some_cases,
+    sim_cases_1 = cases_sim[sample.int(1000, 1), ],
+    sim_cases_2 = cases_sim[sample.int(1000, 1), ],
+    sim_cases_3 = cases_sim[sample.int(1000, 1), ],
   )
 
-
-idx_sim <- sample.int(1000, 1)
-meshblock_incidence_sim <- meshblock_incidence %>%
-  mutate(
-    sim_cases = cases_sim[idx_sim, ],
-  )
-
-meshblock_incidence %>%
-  mutate(
-    incidence = cases / pop
-  ) %>%
+# observed incidence
+meshblock_incidence_posterior %>%
   arrange(incidence) %>%
   ggplot(
     aes(
@@ -178,6 +166,7 @@ meshblock_incidence %>%
   scale_colour_distiller(direction = 1) +
   theme_minimal()
 
+# predicted incidence
 meshblock_incidence_posterior %>%
   arrange(predicted_incidence) %>%
   ggplot(
@@ -190,8 +179,13 @@ meshblock_incidence_posterior %>%
   scale_colour_distiller(direction = 1) +
   theme_minimal()
 
+ggsave("figures/predicted_incidence.png",
+       bg = "white",
+       width = 8,
+       height = 7)
 
-meshblock_incidence %>%
+# whether there were any cases
+meshblock_incidence_posterior %>%
   mutate(
     any_cases = as.numeric(cases > 0)
   ) %>%
@@ -206,9 +200,10 @@ meshblock_incidence %>%
   scale_colour_distiller(direction = 1) +
   theme_minimal()
 
-meshblock_incidence_sim %>%
+# posterior simulation of the same
+meshblock_incidence_posterior %>%
   mutate(
-    sim_any_cases = as.numeric(sim_cases > 0)
+    sim_any_cases = as.numeric(sim_cases_3 > 0)
   ) %>%
   arrange(sim_any_cases) %>%
   ggplot(
@@ -221,7 +216,8 @@ meshblock_incidence_sim %>%
   scale_colour_distiller(direction = 1) +
   theme_minimal()
 
-meshblock_incidence %>%
+# population density
+meshblock_incidence_posterior %>%
   arrange(pop) %>%
   ggplot(
     aes(
@@ -233,17 +229,8 @@ meshblock_incidence %>%
   scale_colour_distiller(direction = 1) +
   theme_minimal()
 
-compare <- meshblock_incidence %>%
-  mutate(
-    incidence = cases / pop
-  ) %>%
-  st_drop_geometry() %>%
-  left_join(
-    st_drop_geometry(meshblock_incidence_posterior),
-    by = "meshblock"
-  )
 
-compare %>%
+meshblock_incidence_posterior %>%
   ggplot(
     aes(
       x = predicted_incidence,
@@ -255,7 +242,7 @@ compare %>%
   theme_minimal()
 
 # overall incidence is well-enough calibrated
-compare %>%
+meshblock_incidence_posterior %>%
   summarise(
     across(
       ends_with("incidence"),
@@ -263,17 +250,45 @@ compare %>%
     )
   )
 
-
-
-dim(cases_sim)
 idx <- which(meshblock_incidence$cases > 1)
 
 library(bayesplot)
-ppc_dens_overlay(y = meshblock_incidence$cases,
-                 yrep = cases_sim)
-
 ppc_ecdf_overlay(y = meshblock_incidence$cases,
                  yrep = cases_sim)
 
 ppc_dens(y = meshblock_incidence$cases[idx],
          yrep = cases_sim[, idx])
+
+
+coords <- meshblock_incidence %>%
+  st_coordinates()
+clus <- 
+
+meshblock_incidence %>%
+  mutate(
+    cluster = kmeans(
+      st_coordinates(.),
+      centers = 100
+      )$cluster
+    ) %>%
+  group_by(
+    cluster
+  ) %>%
+  mutate(
+    incidence = sum(cases) / sum(pop)
+  ) %>%
+  ungroup() %>%
+  ggplot(
+    aes(
+      colour = incidence
+    )
+  ) +
+  geom_sf() +
+  coord_sf() +
+  scale_colour_distiller(direction = 1) +
+  theme_minimal()
+
+ggsave("figures/observed_incidence_clusters.png",
+       bg = "white",
+       width = 8,
+       height = 7)

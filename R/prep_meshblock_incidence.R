@@ -43,6 +43,9 @@ prep_meshblock_incidence <- function(cases, meshblocks) {
       pop > 0,
       pop <= 200,
       area_sqm <= 500 ^ 2
+    ) %>%
+    mutate(
+      incidence = cases / pop
     )
   
 }
