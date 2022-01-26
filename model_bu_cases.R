@@ -96,6 +96,13 @@ fit <- check_fitted_model(fitted_model)
 # positivity
 predictions <- predict_model(fitted_model, meshblocks, rt_scat_positivity)
 
+# define a spatial block pattern for cross-validation
+meshblock_incidence_survey_periods_blocked <- define_blocks(
+  meshblock_incidence_survey_periods,
+  n_blocks = 3
+)
+plot_blocked_incidence(meshblock_incidence_survey_periods_blocked)
+
 # observed incidence
 fit %>%
   arrange(incidence) %>%
