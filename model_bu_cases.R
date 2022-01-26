@@ -54,10 +54,10 @@ cases_survey_periods <- assign_survey_periods(cases)
 cases_seasons <- assign_seasons(cases)
 
 # plot these a la Koen, to check they make sense
-plot_cases_surveys(cases_survey_periods)
+plot_cases_by_period(cases_survey_periods)
 
 # and plot by season
-plot_cases_season(cases_seasons)
+plot_cases_by_period(cases_seasons)
 
 # compute incidence by meshblock, grouped by scat survey period
 meshblock_incidence_survey_periods <- prep_meshblock_incidence(
@@ -69,6 +69,8 @@ meshblock_incidence_seasons <- prep_meshblock_incidence(
   cases_seasons,
   meshblocks
 )
+
+# plot meshblock incidence by season
 
 # step 2: prepare data for modelling
 

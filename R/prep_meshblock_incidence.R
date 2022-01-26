@@ -16,7 +16,7 @@ prep_meshblock_incidence <- function(cases, meshblocks) {
       cases = 1
     ) %>%
     group_by(
-      survey_period,
+      period,
       MB2011
     ) %>%
     summarise(
@@ -25,16 +25,26 @@ prep_meshblock_incidence <- function(cases, meshblocks) {
     )
   
   # join cases to meshblocks to obtain incidence data
-  meshblocks %>%
+  expand.grid(
+    period = unique(cases_grouped$period),
+    MB_CODE11 = unique(meshblocks$MB_CODE11)
+  ) %>%
+    left_join(
+      meshblocks,
+      by = "MB_CODE11"
+    ) %>%
     left_join(
       cases_grouped,
-      by = c("MB_CODE11" = "MB2011")
+      by = c(
+        "MB_CODE11" = "MB2011",
+        "period" = "period"
+      )
     ) %>%
     mutate(
       cases = replace_na(cases, 0)
     ) %>%
     select(
-      survey_period,
+      period,
       meshblock = MB_CODE11,
       cases,
       area_sqm = ALBERS_SQM,

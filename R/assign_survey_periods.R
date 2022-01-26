@@ -15,7 +15,7 @@ assign_survey_periods <- function(cases) {
   cases %>%
     mutate(
       # determine the survey periods to which each exposure period belongs
-      survey_period = case_when(
+      period = case_when(
         exposure_start_date <= survey$summer_end_date &
           exposure_end_date >= survey$summer_start_date ~ "summer",
         exposure_start_date <= survey$winter_end_date &
@@ -25,7 +25,7 @@ assign_survey_periods <- function(cases) {
       .before = everything()
     ) %>%
     filter(
-      survey_period %in% c("summer", "winter")
+      period %in% c("summer", "winter")
     )
   
 }

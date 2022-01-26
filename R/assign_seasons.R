@@ -18,8 +18,8 @@ assign_seasons <- function(cases) {
         with_year = TRUE,
         fiscal_start = 7
       ),
-      season = stringr::str_sub(quarter, 1, 4),
-      season = factor(season),
+      period = stringr::str_sub(quarter, 1, 4),
+      period = factor(period),
       .before = everything()
     ) %>%
     select(
