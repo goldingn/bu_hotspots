@@ -9,6 +9,8 @@
 #' @export
 prep_rt_scat_positivity <- function(scat_positivity, possum_density) {
 
+  survey <- define_survey_periods()
+  
   scat_positivity %>%
     filter(
       species == "ringtail"
@@ -50,7 +52,18 @@ prep_rt_scat_positivity <- function(scat_positivity, possum_density) {
     mutate(
       date_num = as.numeric(date - min(date)),
       x_scaled = (x - mean(x)) / 1000,
-      y_scaled = (y - mean(y)) / 1000,
+      y_scaled = (y - mean(y)) / 1000
+    ) %>%
+    mutate(
+      period = case_when(
+        date >= survey$summer_start_date & date <= survey$summer_end_date ~ "summer",
+        date >= survey$winter_start_date & date <= survey$winter_end_date ~ "winter",
+        TRUE ~ "other"
+      ),
+      .before = everything()
+    ) %>%
+    filter(
+      period != "other"
     )
 
 }

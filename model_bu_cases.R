@@ -72,43 +72,45 @@ meshblock_incidence_seasons <- prep_meshblock_incidence(
 
 # plot meshblock incidence by season
 plot_meshblock_incidence_by_period(
-  meshblock_incidence_seasons,
-  meshblocks
+  meshblock_incidence_seasons
 )
 
+# 1. train the model on two separate periods
+
+# 2. do spatial block CV on these (3 blocks) to validate model
+
+# 3. compare hold-out predictions against prediction based on previous
+# incidence by meshblock (null model)
 
 
 # step 2: prepare data for modelling
 
-positive_scats <- rt_scat_positivity %>%
-  filter(mu_positive)
+meshblock_incidence <- meshblock_incidence_survey_periods
 
+# split incidence and scat positivity into summer and winter surveys
 
-# remove any meshblock (or scat) datapoint that is more than 1km from the
-# nearest other type of datapoint (drops 2 cases, no scats)
-cutoff_distance <- 1
-meshblock_incidence <- meshblock_incidence %>%
-  filter_by_distance(
-    cutoff_distance,
-    positive_scats
+meshblock_incidence_summer <- meshblock_incidence %>%
+  filter(
+    period == "summer"
   )
 
-rt_scat_positivity <- rt_scat_positivity %>%
-  filter_by_distance(
-    cutoff_distance,
-    positive_scats
+rt_scat_positivity_summer <- rt_scat_positivity %>%
+  filter(
+    period == "summer"
   )
 
-# 60 cases left in
-sum(meshblock_incidence$cases)
+meshblock_incidence_winter <- meshblock_incidence %>%
+  filter(
+    period == "winter"
+  )
 
-# compute distance matrix d_ij between meshblock locations and possum scat
-# sampling locations, in km
-distance <- get_distance(meshblock_incidence, rt_scat_positivity)
+rt_scat_positivity_winter <- rt_scat_positivity %>%
+  filter(
+    period == "winter"
+  )
 
 # step 3: define greta model
-
-mu_positivity <- as_data(rt_scat_positivity$mu_positive)
+cutoff_distance <- 1
 
 # define a vague-ish positive prior on the distance decay, with most mass at 0
 # (slightly favouring shorter decays)
@@ -116,36 +118,24 @@ sigma <- normal(0, cutoff_distance / 2, truncation = c(0, Inf))
 # 2 * (1 - pnorm(cutoff_distance, 0, cutoff_distance / 2))
 # 5% chance *a priori* that the sigma goes beyond the cutoff distance
 
-# do sparse matrix-multiply with distance cutoff for computational efficiency
-keep_idx <- which(distance <= cutoff_distance, arr.ind = TRUE)
-row_idx <- keep_idx[, 1]
-col_idx <- keep_idx[, 2]
-distance_sparse <- distance[keep_idx]
-
-# compute unnormalised weights
-weights_raw_sparse <- exp(-0.5 * (distance_sparse / sigma) ^ 2)
-# normalise them (so prediction does not depend on number of samples nearby)
-weights_raw_sum_sparse <- tapply(weights_raw_sparse, row_idx, FUN = "sum")
-weights_sparse <- weights_raw_sparse / weights_raw_sum_sparse[row_idx]
-# multiply weights by covariate and aggregate
-weighted_positivity_elements_sparse <- weights_sparse * mu_positivity[col_idx]
-weighted_positivity <- tapply(weighted_positivity_elements_sparse, row_idx, FUN = "sum")
-
-# # confirm this gives the same answer as the matrix-multiply version
-# mask <- distance <= cutoff_distance
-# weights_raw <- exp(-0.5 * (distance / sigma) ^ 2) * mask
-# weights <- sweep(weights_raw, 1, rowSums(weights_raw), FUN = "/")
-# weighted_positivity_dense <- weights %*% mu_positivity
-# diff <- max(abs(weighted_positivity - weighted_positivity_dense))
-# calculate(diff, nsim = 10)
-
 # scaling parameter on the FOI
 beta <- normal(0, 1, truncation = c(0, Inf))
 
-incidence <- beta * weighted_positivity
-expected_cases <- incidence * meshblock_incidence$pop
-
-distribution(meshblock_incidence$cases) <- poisson(expected_cases)
+# define likelihoods on the two seasons separately
+likelihood_summer <- define_likelihood(
+  meshblock_incidence = meshblock_incidence_summer,
+  rt_scat_positivity = rt_scat_positivity_summer,
+  beta = beta,
+  sigma = sigma,
+  cutoff_distance = cutoff_distance
+)
+likelihood_winter <- define_likelihood(
+  meshblock_incidence = meshblock_incidence_winter,
+  rt_scat_positivity = rt_scat_positivity_winter,
+  beta = beta,
+  sigma = sigma,
+  cutoff_distance = cutoff_distance
+)
 
 m <- model(beta, sigma)
 draws <- mcmc(m)

@@ -33,6 +33,7 @@ prep_meshblock_incidence <- function(cases, meshblocks) {
       meshblocks,
       by = "MB_CODE11"
     ) %>%
+    st_as_sf() %>%
     left_join(
       cases_grouped,
       by = c(
@@ -49,6 +50,7 @@ prep_meshblock_incidence <- function(cases, meshblocks) {
       cases,
       area_sqm = ALBERS_SQM,
       pop = Population,
+      geometry
     ) %>%
     # keep only those with some population, and area less than 500m x 500m (to
     # retain spatial precision)

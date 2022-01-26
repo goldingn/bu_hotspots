@@ -8,17 +8,12 @@
 #' @author Nick Golding
 #' @export
 plot_meshblock_incidence_by_period <- function(
-  meshblock_incidence_seasons,
-  meshblocks
+  meshblock_incidence
 ) {
 
-  meshblock_incidence_seasons %>%
+  meshblock_incidence %>%
     arrange(
       incidence
-    ) %>%
-    left_join(
-      meshblocks,
-      by = c("meshblock" = "MB_CODE11")
     ) %>%
     ggplot(
       aes(
