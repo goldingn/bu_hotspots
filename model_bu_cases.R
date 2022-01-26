@@ -71,6 +71,12 @@ meshblock_incidence_seasons <- prep_meshblock_incidence(
 )
 
 # plot meshblock incidence by season
+plot_meshblock_incidence_by_period(
+  meshblock_incidence_seasons,
+  meshblocks
+)
+
+
 
 # step 2: prepare data for modelling
 
