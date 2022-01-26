@@ -237,7 +237,12 @@ predictions_to_evaluate %>%
     # 2. poisson deviance on case counts
     dev_cases = poisson_deviance(cases, pred_cases),
     # 3. AUC for presence of any cases
-    auc_any = Metrics::auc(any, pred_any)
+    auc_any = Metrics::auc(any, pred_any),
+    # 4. fraction of cases intervened with for a fraction of meshblocks targetted
+    fraction_intervened_5pc = fraction_cases_intervened(cases, pred_cases, 0.05),
+    fraction_intervened_10pc = fraction_cases_intervened(cases, pred_cases, 0.10),
+    fraction_intervened_20pc = fraction_cases_intervened(cases, pred_cases, 0.20),
+    fraction_intervened_50pc = fraction_cases_intervened(cases, pred_cases, 0.50)
   ) %>%
   arrange(
     method
@@ -253,11 +258,23 @@ predictions_to_evaluate %>%
     dev_cases = poisson_deviance(cases, pred_cases),
     # 3. AUC for presence of any cases
     auc_any = Metrics::auc(any, pred_any),
+    # 4. fraction of cases intervened with for a fraction of meshblocks targetted
+    fraction_intervened_5pc = fraction_cases_intervened(cases, pred_cases, 0.05),
+    fraction_intervened_10pc = fraction_cases_intervened(cases, pred_cases, 0.10),
+    fraction_intervened_20pc = fraction_cases_intervened(cases, pred_cases, 0.20),
+    fraction_intervened_50pc = fraction_cases_intervened(cases, pred_cases, 0.50)
   ) %>%
   arrange(
     block,
     method
   )
+
+
+
+
+
+
+
 
 # observed incidence
 fit %>%
