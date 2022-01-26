@@ -3,15 +3,16 @@
 #' .. content for \details{} ..
 #'
 #' @title
-#' @param cases
+#' @param cases_seasons
 #' @return
 #' @author Nick Golding
 #' @export
-plot_cases_surveys <- function(cases_survey_periods) {
+plot_cases_season <- function(cases_seasons) {
 
-  cases_survey_periods %>%
-    arrange(
-      symptom_onset_date
+  cases_seasons %>%
+    filter(
+      symptom_onset_date > as.Date("2019-01-01"),
+      symptom_onset_date < as.Date("2020-12-31"),
     ) %>%
     mutate(
       case = factor(row_number()),
@@ -23,7 +24,7 @@ plot_cases_surveys <- function(cases_survey_periods) {
         xmin = exposure_start_date,
         xmax = exposure_end_date,
         y = case,
-        colour = survey_period
+        colour = season
       )
     ) +
     geom_point() +
@@ -37,5 +38,5 @@ plot_cases_surveys <- function(cases_survey_periods) {
       axis.ticks.y = element_blank()
     ) +
     xlab("date")
-
+  
 }

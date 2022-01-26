@@ -48,11 +48,27 @@ meshblocks <- load_meshblocks()
 # load in residential BU cases and use 2016 populations
 cases <- load_cases()
 
-# plot these a la Koen, to check they make sense
-plot_cases_surveys(cases)
+# assign survey periods and seasons
+cases_survey_periods <- assign_survey_periods(cases)
 
-# compute incidence by meshblock
-meshblock_incidence <- prep_meshblock_incidence(cases, meshblocks)
+cases_seasons <- assign_seasons(cases)
+
+# plot these a la Koen, to check they make sense
+plot_cases_surveys(cases_survey_periods)
+
+# and plot by season
+plot_cases_season(cases_seasons)
+
+# compute incidence by meshblock, grouped by scat survey period
+meshblock_incidence_survey_periods <- prep_meshblock_incidence(
+  cases_survey_periods,
+  meshblocks
+)
+
+meshblock_incidence_seasons <- prep_meshblock_incidence(
+  cases_seasons,
+  meshblocks
+)
 
 # step 2: prepare data for modelling
 

@@ -10,16 +10,18 @@
 #' @export
 prep_meshblock_incidence <- function(cases, meshblocks) {
 
-  # compute counts in meshblocks with any cases
+  # compute counts by survey period in meshblocks with any cases
   cases_grouped <- cases %>%
     mutate(
       cases = 1
     ) %>%
     group_by(
+      survey_period,
       MB2011
     ) %>%
     summarise(
-      cases = sum(cases)
+      cases = sum(cases),
+      .groups = "drop"
     )
   
   # join cases to meshblocks to obtain incidence data
@@ -32,6 +34,7 @@ prep_meshblock_incidence <- function(cases, meshblocks) {
       cases = replace_na(cases, 0)
     ) %>%
     select(
+      survey_period,
       meshblock = MB_CODE11,
       cases,
       area_sqm = ALBERS_SQM,

@@ -1,0 +1,30 @@
+#' .. content for \description{} (no empty lines) ..
+#'
+#' .. content for \details{} ..
+#'
+#' @title
+#' @param cases
+#' @return
+#' @author Nick Golding
+#' @export
+assign_seasons <- function(cases) {
+
+  # assign to financial years, based on the estimated infection date
+  cases %>%
+    mutate(
+      exposure_estimate = symptom_onset_date - 143,
+      quarter = lubridate::quarter(
+        exposure_estimate,
+        with_year = TRUE,
+        fiscal_start = 7
+      ),
+      season = stringr::str_sub(quarter, 1, 4),
+      season = factor(season),
+      .before = everything()
+    ) %>%
+    select(
+      -exposure_estimate,
+      -quarter
+    )
+
+}
