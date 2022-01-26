@@ -80,28 +80,166 @@ plot_meshblock_incidence_by_period(
 # 2. do spatial block CV on these (3 blocks) to validate model
 #    - pull out the prediction code into a function - DONE
 #    - wrap up the fitting and prediction code in functions - DONE
-#    - define spatial blocks
+#    - define spatial blocks - DONE
 #    - loop through blocks, fitting and predicting
 
 # 3. compare hold-out predictions against prediction based on previous
 # incidence by meshblock (null model)
 
-fitted_model <- train_model(
-  meshblock_incidence = meshblock_incidence_survey_periods,
-  rt_scat_positivity = rt_scat_positivity,
-)
-fit <- check_fitted_model(fitted_model)
-
-# predict to a new set of locations, given the meshblock info and scat
-# positivity
-predictions <- predict_model(fitted_model, meshblocks, rt_scat_positivity)
+n_cv_blocks <- 3
 
 # define a spatial block pattern for cross-validation
 meshblock_incidence_survey_periods_blocked <- define_blocks(
   meshblock_incidence_survey_periods,
-  n_blocks = 3
+  n_blocks = n_cv_blocks
 )
 plot_blocked_incidence(meshblock_incidence_survey_periods_blocked)
+
+# split into training and testing sets
+training <- split_data(
+  meshblock_incidence_survey_periods_blocked,
+  which = "train"
+)
+
+testing <- split_data(
+  meshblock_incidence_survey_periods_blocked,
+  which = "test"
+)
+
+# loop through fitting models (takes some time)
+fitted_models <- lapply(
+  training,
+  train_model,
+  rt_scat_positivity = rt_scat_positivity
+)
+
+# loop through doing checks
+fits <- lapply(
+  fitted_models,
+  check_fitted_model,
+)
+
+# loop through doing predictions to hold-out data
+predictions <- mapply(
+  FUN = predict_model,
+  fitted_model = fitted_models,
+  meshblocks = testing,
+  MoreArgs = list(rt_scat_positivity = rt_scat_positivity),
+  SIMPLIFY = FALSE
+)
+
+# combine
+predictions_all <- do.call(
+  bind_rows,
+  predictions
+)
+
+# predictions_all <- predictions_all %>%
+#   rename(
+#     incidence_pred_upper = `incidence_pred_upper <- incidence_posterior_quants[2, ]`,
+#     incidence_pred_lower = `incidence_pred_lower <- incidence_posterior_quants[1, ]`
+#   )
+
+# simplify blocking info, for joining to previous data
+blocking <- predictions_all %>%
+  st_drop_geometry() %>%
+  select(
+    meshblock,
+    block
+  ) %>%
+  distinct()
+
+# calculate empirical incidences from previous year (2018 financial year)
+previous_incidence = meshblock_incidence_seasons %>%
+  st_drop_geometry() %>%
+  filter(
+    period == "2018",
+    meshblock %in% predictions_all$meshblock
+  ) %>%
+  left_join(
+    blocking,
+    by = "meshblock"
+  ) %>%
+  rename(
+    incidence_meshblock_2018 = incidence
+  ) %>%
+  group_by(
+    block
+  ) %>%
+  mutate(
+    incidence_block_2018 = sum(cases) / sum(pop)
+  ) %>%
+  ungroup() %>%
+  select(
+    meshblock,
+    incidence_meshblock_2018,
+    incidence_block_2018
+  )
+
+# get a dataframe of all the predictions to compare
+predictions_to_evaluate <- predictions_all %>%
+  left_join(
+    previous_incidence,
+    by = "meshblock"
+  ) %>%
+  left_join(
+    survey_period_incidence_multipliers(),
+    by = "period"
+  ) %>%
+  # 1. correlation in annualised incidence (need to adjust those defined on survey period)
+  mutate(
+    annualincidence = incidence / multiplier,
+    pred_annualincidence_model = incidence_pred_mean / multiplier,
+    pred_annualincidence_meshblock = incidence_meshblock_2018,
+    pred_annualincidence_block = incidence_block_2018,
+  ) %>%
+  # 2. poisson deviance on case counts (convert empirical incidence to predicted
+  mutate(
+    pred_cases_model = incidence_pred_mean * pop,
+    pred_cases_meshblock = incidence_meshblock_2018 * multiplier * pop,
+    pred_cases_block = incidence_block_2018 * multiplier * pop,
+  ) %>%
+  # 3. AUC for presence of any cases
+  mutate(
+    any = as.numeric(cases > 0),
+    pred_any_model = prob_any_cases(pred_cases_model),
+    pred_any_meshblock = prob_any_cases(pred_cases_meshblock),
+    pred_any_block = prob_any_cases(pred_cases_block),
+  ) %>%
+  pivot_longer(
+    cols = starts_with("pred_"),
+    names_to = c(".value", "prediction"),
+    names_pattern = "(.*)_(.*)"
+  ) %>%
+  select(
+    period,
+    block,
+    meshblock,
+    cases,
+    annualincidence,
+    any,
+    prediction,
+    starts_with("pred")
+  )
+
+predictions_to_evaluate %>%
+  group_by(prediction) %>%
+  summarise(
+    # 1. correlation in annual incidence
+    cor_annualincidence = cor(annualincidence, pred_annualincidence),
+    # 2. poisson deviance on case counts
+    dev_cases = poisson_deviance(cases, pred_cases),
+    # 3. AUC for presence of any cases
+    auc_any = Metrics::auc(any, pred_any)
+  ) %>%
+  arrange(
+    desc(auc_any)
+  )
+
+
+
+
+
 
 # observed incidence
 fit %>%

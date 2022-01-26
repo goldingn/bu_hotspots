@@ -65,8 +65,8 @@ predict_model <- function(
   meshblocks %>%
     mutate(
       incidence_pred_mean = colMeans(incidence_posterior[, , 1]),
-      incidence_pred_lower <- incidence_posterior_quants[1, ],
-      incidence_pred_upper <- incidence_posterior_quants[2, ]
+      incidence_pred_lower = incidence_posterior_quants[1, ],
+      incidence_pred_upper = incidence_posterior_quants[2, ]
     )
   
 }
