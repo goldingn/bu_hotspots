@@ -84,112 +84,18 @@ plot_meshblock_incidence_by_period(
 # 3. compare hold-out predictions against prediction based on previous
 # incidence by meshblock (null model)
 
+fitted_model <- train_model(meshblock_incidence, rt_scat_positivity)
+
+fitted <- check_fitted_model(fitted_model)
 
 # step 2: prepare data for modelling
 
-meshblock_incidence <- meshblock_incidence_survey_periods
-
-# split incidence and scat positivity into summer and winter surveys
-
-meshblock_incidence_summer <- meshblock_incidence %>%
-  filter(
-    period == "summer"
-  )
-
-rt_scat_positivity_summer <- rt_scat_positivity %>%
-  filter(
-    period == "summer"
-  )
-
-meshblock_incidence_winter <- meshblock_incidence %>%
-  filter(
-    period == "winter"
-  )
-
-rt_scat_positivity_winter <- rt_scat_positivity %>%
-  filter(
-    period == "winter"
-  )
 
 # step 3: define greta model
-cutoff_distance <- 1
 
-# define a vague-ish positive prior on the distance decay, with most mass at 0
-# (slightly favouring shorter decays)
-sigma <- normal(0, cutoff_distance / 2, truncation = c(0, Inf))
-# 2 * (1 - pnorm(cutoff_distance, 0, cutoff_distance / 2))
-# 5% chance *a priori* that the sigma goes beyond the cutoff distance
-
-# scaling parameter on the FOI
-beta <- normal(0, 1, truncation = c(0, Inf))
-
-# define likelihoods on the two seasons separately
-likelihood_summer <- define_likelihood(
-  meshblock_incidence = meshblock_incidence_summer,
-  rt_scat_positivity = rt_scat_positivity_summer,
-  beta = beta,
-  sigma = sigma,
-  cutoff_distance = cutoff_distance
-)
-likelihood_winter <- define_likelihood(
-  meshblock_incidence = meshblock_incidence_winter,
-  rt_scat_positivity = rt_scat_positivity_winter,
-  beta = beta,
-  sigma = sigma,
-  cutoff_distance = cutoff_distance
-)
-
-m <- model(beta, sigma)
-draws <- mcmc(m)
-
-plot(draws)
-coda::gelman.diag(draws, autoburnin = FALSE, multivariate = FALSE)
-
-# get combined incidence and expected cases for plotting
-incidence <- rbind(
-  likelihood_summer$greta_arrays$incidence,
-  likelihood_winter$greta_arrays$incidence
-)
-
-expected_cases <- rbind(
-  likelihood_summer$greta_arrays$expected_cases,
-  likelihood_winter$greta_arrays$expected_cases
-)
-
-data <- rbind(
-  likelihood_summer$data$meshblock_incidence,
-  likelihood_winter$data$meshblock_incidence
-)
-
-# get posterior means of the predicted incidence and cases
-incidence_posterior <- calculate(incidence, values = draws, nsim = 1000)[[1]]
-incidence_posterior_mean <- colMeans(incidence_posterior[, , 1])
-
-expected_cases_posterior <- calculate(expected_cases, values = draws, nsim = 1000)[[1]]
-expected_cases_posterior_mean <- colMeans(expected_cases_posterior[, , 1])
-
-# simulate cases for PPCs and exceedance probabilities
-cases_new <- poisson(expected_cases)
-cases_sim <- calculate(
-  cases_new,
-  values = draws,
-  nsim = 1000
-)[[1]][, , 1]
-
-p_some_cases <- colMeans(cases_sim > 0)
-
-meshblock_incidence_posterior <- data %>%
-  mutate(
-    predicted_incidence = incidence_posterior_mean,
-    predicted_cases = expected_cases_posterior_mean,
-    probability_of_cases = p_some_cases,
-    sim_cases_1 = cases_sim[sample.int(1000, 1), ],
-    sim_cases_2 = cases_sim[sample.int(1000, 1), ],
-    sim_cases_3 = cases_sim[sample.int(1000, 1), ],
-  )
 
 # observed incidence
-meshblock_incidence_posterior %>%
+fitted %>%
   arrange(incidence) %>%
   ggplot(
     aes(
@@ -202,7 +108,7 @@ meshblock_incidence_posterior %>%
   theme_minimal()
 
 # predicted incidence
-meshblock_incidence_posterior %>%
+fitted %>%
   arrange(predicted_incidence) %>%
   ggplot(
     aes(
@@ -220,7 +126,7 @@ ggsave("figures/predicted_incidence.png",
        height = 7)
 
 # whether there were any cases
-meshblock_incidence_posterior %>%
+fitted %>%
   mutate(
     any_cases = as.numeric(cases > 0)
   ) %>%
@@ -236,7 +142,7 @@ meshblock_incidence_posterior %>%
   theme_minimal()
 
 # posterior simulation of the same
-meshblock_incidence_posterior %>%
+fitted %>%
   mutate(
     sim_any_cases = as.numeric(sim_cases_3 > 0)
   ) %>%
@@ -252,7 +158,7 @@ meshblock_incidence_posterior %>%
   theme_minimal()
 
 # population density
-meshblock_incidence_posterior %>%
+fitted %>%
   arrange(pop) %>%
   ggplot(
     aes(
@@ -265,7 +171,7 @@ meshblock_incidence_posterior %>%
   theme_minimal()
 
 
-meshblock_incidence_posterior %>%
+fitted %>%
   ggplot(
     aes(
       x = predicted_incidence,
@@ -277,7 +183,7 @@ meshblock_incidence_posterior %>%
   theme_minimal()
 
 # overall incidence is well-enough calibrated
-meshblock_incidence_posterior %>%
+fitted %>%
   summarise(
     across(
       ends_with("incidence"),
@@ -285,16 +191,16 @@ meshblock_incidence_posterior %>%
     )
   )
 
-idx <- which(data$cases > 1)
+idx <- which(fitted$cases > 1)
 
 library(bayesplot)
-ppc_ecdf_overlay(y = data$cases,
+ppc_ecdf_overlay(y = fitted$cases,
                  yrep = cases_sim)
 
-ppc_dens(y = data$cases[idx],
+ppc_dens(y = fitted$cases[idx],
          yrep = cases_sim[, idx])
 
-coords <- meshblock_incidence %>%
+coords <- fitted %>%
   st_coordinates()
 
 clus <- data %>%
@@ -321,8 +227,8 @@ clus <- data %>%
   scale_colour_distiller(direction = 1) +
   theme_minimal()
 
-
 clus
+
 ggsave("figures/observed_incidence_clusters.png",
        bg = "white",
        width = 8,
