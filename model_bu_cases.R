@@ -48,6 +48,9 @@ meshblocks <- load_meshblocks()
 # load in residential BU cases and use 2016 populations
 cases <- load_cases()
 
+# plot these a la Koen, to check they make sense
+plot_cases_surveys(cases)
+
 # compute incidence by meshblock
 meshblock_incidence <- prep_meshblock_incidence(cases, meshblocks)
 
@@ -95,7 +98,7 @@ row_idx <- keep_idx[, 1]
 col_idx <- keep_idx[, 2]
 distance_sparse <- distance[keep_idx]
 
-# compute unnoralised weights
+# compute unnormalised weights
 weights_raw_sparse <- exp(-0.5 * (distance_sparse / sigma) ^ 2)
 # normalise them (so prediction does not depend on number of samples nearby)
 weights_raw_sum_sparse <- tapply(weights_raw_sparse, row_idx, FUN = "sum")
