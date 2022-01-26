@@ -93,7 +93,13 @@ meshblock_incidence_survey_periods_blocked <- define_blocks(
   meshblock_incidence_survey_periods,
   n_blocks = n_cv_blocks
 )
+
+# plot these blocks
 plot_blocked_incidence(meshblock_incidence_survey_periods_blocked)
+ggsave("figures/cv_blocks.png",
+       width = 8,
+       height = 6,
+       bg = "white")
 
 # split into training and testing sets
 training <- split_data(
@@ -133,12 +139,6 @@ predictions_all <- do.call(
   bind_rows,
   predictions
 )
-
-# predictions_all <- predictions_all %>%
-#   rename(
-#     incidence_pred_upper = `incidence_pred_upper <- incidence_posterior_quants[2, ]`,
-#     incidence_pred_lower = `incidence_pred_lower <- incidence_posterior_quants[1, ]`
-#   )
 
 # simplify blocking info, for joining to previous data
 blocking <- predictions_all %>%
@@ -190,21 +190,21 @@ predictions_to_evaluate <- predictions_all %>%
   mutate(
     annualincidence = incidence / multiplier,
     pred_annualincidence_model = incidence_pred_mean / multiplier,
-    pred_annualincidence_meshblock = incidence_meshblock_2018,
-    pred_annualincidence_block = incidence_block_2018,
+    pred_annualincidence_meshblock2018 = incidence_meshblock_2018,
+    pred_annualincidence_cvblock2018 = incidence_block_2018,
   ) %>%
   # 2. poisson deviance on case counts (convert empirical incidence to predicted
   mutate(
     pred_cases_model = incidence_pred_mean * pop,
-    pred_cases_meshblock = incidence_meshblock_2018 * multiplier * pop,
-    pred_cases_block = incidence_block_2018 * multiplier * pop,
+    pred_cases_meshblock2018 = incidence_meshblock_2018 * multiplier * pop,
+    pred_cases_cvblock2018 = incidence_block_2018 * multiplier * pop,
   ) %>%
   # 3. AUC for presence of any cases
   mutate(
     any = as.numeric(cases > 0),
     pred_any_model = prob_any_cases(pred_cases_model),
-    pred_any_meshblock = prob_any_cases(pred_cases_meshblock),
-    pred_any_block = prob_any_cases(pred_cases_block),
+    pred_any_meshblock2018 = prob_any_cases(pred_cases_meshblock2018),
+    pred_any_cvblock2018 = prob_any_cases(pred_cases_cvblock2018),
   ) %>%
   pivot_longer(
     cols = starts_with("pred_"),
@@ -218,12 +218,19 @@ predictions_to_evaluate <- predictions_all %>%
     cases,
     annualincidence,
     any,
-    prediction,
+    method = prediction,
     starts_with("pred")
+  ) %>%
+  mutate(
+    method = factor(
+      method,
+      levels = c("model", "meshblock2018", "cvblock2018")
+    )
   )
+  
 
 predictions_to_evaluate %>%
-  group_by(prediction) %>%
+  group_by(method) %>%
   summarise(
     # 1. correlation in annual incidence
     cor_annualincidence = cor(annualincidence, pred_annualincidence),
@@ -233,13 +240,24 @@ predictions_to_evaluate %>%
     auc_any = Metrics::auc(any, pred_any)
   ) %>%
   arrange(
-    desc(auc_any)
+    method
   )
 
 
-
-
-
+predictions_to_evaluate %>%
+  group_by(method, block) %>%
+  summarise(
+    # 1. correlation in annual incidence
+    cor_annualincidence = cor(annualincidence, pred_annualincidence),
+    # 2. poisson deviance on case counts
+    dev_cases = poisson_deviance(cases, pred_cases),
+    # 3. AUC for presence of any cases
+    auc_any = Metrics::auc(any, pred_any),
+  ) %>%
+  arrange(
+    block,
+    method
+  )
 
 # observed incidence
 fit %>%
