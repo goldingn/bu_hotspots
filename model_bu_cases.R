@@ -78,24 +78,26 @@ plot_meshblock_incidence_by_period(
 # 1. train the model on two separate periods - DONE
 
 # 2. do spatial block CV on these (3 blocks) to validate model
-#    - pull out the prediction code into a function
-#    - wrap up the fitting and prediction code in functions
+#    - pull out the prediction code into a function - DONE
+#    - wrap up the fitting and prediction code in functions - DONE
+#    - define spatial blocks
+#    - loop through blocks, fitting and predicting
 
 # 3. compare hold-out predictions against prediction based on previous
 # incidence by meshblock (null model)
 
-fitted_model <- train_model(meshblock_incidence, rt_scat_positivity)
+fitted_model <- train_model(
+  meshblock_incidence = meshblock_incidence_survey_periods,
+  rt_scat_positivity = rt_scat_positivity,
+)
+fit <- check_fitted_model(fitted_model)
 
-fitted <- check_fitted_model(fitted_model)
-
-# step 2: prepare data for modelling
-
-
-# step 3: define greta model
-
+# predict to a new set of locations, given the meshblock info and scat
+# positivity
+predictions <- predict_model(fitted_model, meshblocks, rt_scat_positivity)
 
 # observed incidence
-fitted %>%
+fit %>%
   arrange(incidence) %>%
   ggplot(
     aes(
@@ -108,7 +110,7 @@ fitted %>%
   theme_minimal()
 
 # predicted incidence
-fitted %>%
+fit %>%
   arrange(predicted_incidence) %>%
   ggplot(
     aes(
@@ -126,7 +128,7 @@ ggsave("figures/predicted_incidence.png",
        height = 7)
 
 # whether there were any cases
-fitted %>%
+fit %>%
   mutate(
     any_cases = as.numeric(cases > 0)
   ) %>%
@@ -142,7 +144,7 @@ fitted %>%
   theme_minimal()
 
 # posterior simulation of the same
-fitted %>%
+fit %>%
   mutate(
     sim_any_cases = as.numeric(sim_cases_3 > 0)
   ) %>%
@@ -158,7 +160,7 @@ fitted %>%
   theme_minimal()
 
 # population density
-fitted %>%
+fit %>%
   arrange(pop) %>%
   ggplot(
     aes(
@@ -171,7 +173,7 @@ fitted %>%
   theme_minimal()
 
 
-fitted %>%
+fit %>%
   ggplot(
     aes(
       x = predicted_incidence,
@@ -183,7 +185,7 @@ fitted %>%
   theme_minimal()
 
 # overall incidence is well-enough calibrated
-fitted %>%
+fit %>%
   summarise(
     across(
       ends_with("incidence"),
@@ -191,19 +193,19 @@ fitted %>%
     )
   )
 
-idx <- which(fitted$cases > 1)
+idx <- which(fit$cases > 1)
 
 library(bayesplot)
-ppc_ecdf_overlay(y = fitted$cases,
+ppc_ecdf_overlay(y = fit$cases,
                  yrep = cases_sim)
 
-ppc_dens(y = fitted$cases[idx],
+ppc_dens(y = fit$cases[idx],
          yrep = cases_sim[, idx])
 
-coords <- fitted %>%
+coords <- fit %>%
   st_coordinates()
 
-clus <- data %>%
+clus <- fit %>%
   mutate(
     cluster = kmeans(
       st_coordinates(.),

@@ -64,11 +64,11 @@ train_model <- function(meshblock_incidence, rt_scat_positivity, cutoff_distance
     draws = draws,
     likelihoods = list(
       summer = likelihood_summer,
-      winter = likelihood_winter,
-      parameters = c(
-        alpha = alpha,
-        beta = beta
-      )
+      winter = likelihood_winter
+    ),
+    parameters = list(
+      beta = beta,
+      sigma = sigma
     )
   )
   
