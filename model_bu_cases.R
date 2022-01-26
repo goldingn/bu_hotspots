@@ -75,9 +75,11 @@ plot_meshblock_incidence_by_period(
   meshblock_incidence_seasons
 )
 
-# 1. train the model on two separate periods
+# 1. train the model on two separate periods - DONE
 
 # 2. do spatial block CV on these (3 blocks) to validate model
+#    - pull out the prediction code into a function
+#    - wrap up the fitting and prediction code in functions
 
 # 3. compare hold-out predictions against prediction based on previous
 # incidence by meshblock (null model)
@@ -143,6 +145,22 @@ draws <- mcmc(m)
 plot(draws)
 coda::gelman.diag(draws, autoburnin = FALSE, multivariate = FALSE)
 
+# get combined incidence and expected cases for plotting
+incidence <- rbind(
+  likelihood_summer$greta_arrays$incidence,
+  likelihood_winter$greta_arrays$incidence
+)
+
+expected_cases <- rbind(
+  likelihood_summer$greta_arrays$expected_cases,
+  likelihood_winter$greta_arrays$expected_cases
+)
+
+data <- rbind(
+  likelihood_summer$data$meshblock_incidence,
+  likelihood_winter$data$meshblock_incidence
+)
+
 # get posterior means of the predicted incidence and cases
 incidence_posterior <- calculate(incidence, values = draws, nsim = 1000)[[1]]
 incidence_posterior_mean <- colMeans(incidence_posterior[, , 1])
@@ -160,7 +178,7 @@ cases_sim <- calculate(
 
 p_some_cases <- colMeans(cases_sim > 0)
 
-meshblock_incidence_posterior <- meshblock_incidence %>%
+meshblock_incidence_posterior <- data %>%
   mutate(
     predicted_incidence = incidence_posterior_mean,
     predicted_cases = expected_cases_posterior_mean,
@@ -267,21 +285,19 @@ meshblock_incidence_posterior %>%
     )
   )
 
-idx <- which(meshblock_incidence$cases > 1)
+idx <- which(data$cases > 1)
 
 library(bayesplot)
-ppc_ecdf_overlay(y = meshblock_incidence$cases,
+ppc_ecdf_overlay(y = data$cases,
                  yrep = cases_sim)
 
-ppc_dens(y = meshblock_incidence$cases[idx],
+ppc_dens(y = data$cases[idx],
          yrep = cases_sim[, idx])
-
 
 coords <- meshblock_incidence %>%
   st_coordinates()
-clus <- 
 
-meshblock_incidence %>%
+clus <- data %>%
   mutate(
     cluster = kmeans(
       st_coordinates(.),
@@ -305,6 +321,8 @@ meshblock_incidence %>%
   scale_colour_distiller(direction = 1) +
   theme_minimal()
 
+
+clus
 ggsave("figures/observed_incidence_clusters.png",
        bg = "white",
        width = 8,
