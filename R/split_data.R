@@ -22,14 +22,14 @@ split_data <- function(blocked, which = c("train", "test")) {
     # this_block is used for testing, but not training
     if (which == "train") {
       
-      splits[[this_block]] <- meshblock_incidence_survey_periods_blocked %>%
+      splits[[this_block]] <- blocked %>%
         filter(
           block != this_block
         )
       
     } else {
       
-      splits[[this_block]] <- meshblock_incidence_survey_periods_blocked %>%
+      splits[[this_block]] <- blocked %>%
         filter(
           block == this_block
         )
