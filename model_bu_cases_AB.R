@@ -222,6 +222,21 @@ predictions_all <- do.call(
   predictions
 )
 
+
+
+# fit model to entire dataset in the Mornington Peninsula and predict to all of Geelong
+fitted_model_overall <- train_model(
+  meshblock_incidence = meshblock_incidence_survey_periods,
+  rt_scat_positivity = rt_scat_positivity
+)
+
+prediction_Geelong <- predict_model(
+  fitted_model_overall,
+  meshblocks = meshblock_incidence_survey_periods_Geelong,
+  rt_scat_positivity = rt_scat_positivity_Geelong
+)
+
+
 # simplify blocking info, for joining to previous data
 # blocking <- predictions_all %>%st_drop_geometry() %>%select(meshblock,  block) %>%distinct()
 blocking <- predictions_all %>%
