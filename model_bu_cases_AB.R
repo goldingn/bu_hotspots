@@ -129,12 +129,12 @@ saveRDS(meshblock_incidence_survey_periods_blocked_Geelong, file = "meshblock_in
 
 # split into training and testing sets
 training <- split_data(meshblock_incidence_survey_periods_blocked,which = "train")
-training_Geelong <- split_data(meshblock_incidence_survey_periods_blocked_Geelong,which = "train")
+# training_Geelong <- split_data(meshblock_incidence_survey_periods_blocked_Geelong,which = "train")
 
-training <- split_data(
-  meshblock_incidence_survey_periods_blocked,
-  which = "train"
-)
+# training <- split_data(
+#   meshblock_incidence_survey_periods_blocked,
+#   which = "train"
+# )
 
 # training: total=3680 is a list of 1,2,3
 # 1: 880 x 7
@@ -145,7 +145,7 @@ training <- split_data(
 # 1: 4870 x 7
 # 2: 1666 x 7
 # 3: 4460 x 7
-
+# 
 testing <- split_data(meshblock_incidence_survey_periods_blocked,which = "test")
 testing_Geelong <- split_data(meshblock_incidence_survey_periods_blocked_Geelong,which = "test")
 
