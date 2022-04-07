@@ -110,10 +110,10 @@ n_cv_blocks <- 3
 meshblock_incidence_survey_periods_blocked <- define_blocks(meshblock_incidence_survey_periods,n_blocks = n_cv_blocks)
 meshblock_incidence_survey_periods_blocked_Geelong <- define_blocks(meshblock_incidence_survey_periods_Geelong,n_blocks = n_cv_blocks)
 
-meshblock_incidence_survey_periods_blocked <- define_blocks(
-  meshblock_incidence_survey_periods,
-  n_blocks = n_cv_blocks
-)
+# meshblock_incidence_survey_periods_blocked <- define_blocks(
+#   meshblock_incidence_survey_periods,
+#   n_blocks = n_cv_blocks
+# )
 
 # meshblock_incidence_survey_periods_blocked: 1840 x 8
 
@@ -149,10 +149,10 @@ training <- split_data(
 testing <- split_data(meshblock_incidence_survey_periods_blocked,which = "test")
 testing_Geelong <- split_data(meshblock_incidence_survey_periods_blocked_Geelong,which = "test")
 
-testing <- split_data(
-  meshblock_incidence_survey_periods_blocked,
-  which = "test"
-)
+# testing <- split_data(
+#   meshblock_incidence_survey_periods_blocked,
+#   which = "test"
+# )
 
 # testing: total=1840
 # 1: 960 x 7
@@ -173,20 +173,21 @@ saveRDS(rt_scat_positivity_Geelong, file = "rt_scat_positivity_Geelong.rds")
 
 
 # loop through fitting models (takes some time)
-fitted_models <- lapply(training,train_model,rt_scat_positivity = rt_scat_positivity)
-#fitted_models_Geelong <- lapply(training_Geelong,train_model,rt_scat_positivity = rt_scat_positivity_Geelong)
+# fitted_models <- lapply(training,train_model,rt_scat_positivity = rt_scat_positivity)
+# fitted_models_Geelong <- lapply(training_Geelong,train_model,rt_scat_positivity = rt_scat_positivity_Geelong)
 
 fitted_models <- lapply(
   training,
   train_model,
   rt_scat_positivity = rt_scat_positivity
 )
+saveRDS(fitted_models, "~/Desktop/fitted_models.RDS")
 
-fitted_models <- readRDS(file = "fitted_models.rds")
+# fitted_models <- readRDS(file = "~/Desktop/fitted_models.rds")
 
 # loop through doing checks
-fits <- lapply(fitted_models,check_fitted_model)
-fits_Geelong <- lapply(fitted_models_Geelong,check_fitted_model)
+# fits <- lapply(fitted_models,check_fitted_model)
+# fits_Geelong <- lapply(fitted_models_Geelong,check_fitted_model)
 
 fits <- lapply(
   fitted_models,
@@ -194,26 +195,35 @@ fits <- lapply(
 )
 
 # loop through doing predictions to hold-out data
-predictions <- mapply(FUN = predict_model,fitted_model = fitted_models,meshblocks = testing,MoreArgs = list(rt_scat_positivity = rt_scat_positivity),SIMPLIFY = FALSE)
-predictions <- mapply(FUN = predict_model,fitted_model = fitted_models,meshblocks = testing_Geelong,MoreArgs = list(rt_scat_positivity = rt_scat_positivity_Geelong),SIMPLIFY = FALSE)
-
 predictions <- mapply(
   FUN = predict_model,
   fitted_model = fitted_models,
   meshblocks = testing,
-  MoreArgs = list(rt_scat_positivity = rt_scat_positivity),
+  MoreArgs = list(
+    rt_scat_positivity = rt_scat_positivity
+  ),
+  SIMPLIFY = FALSE
+)
+
+predictions_geelong <- mapply(
+  FUN = predict_model,
+  fitted_model = fitted_models,
+  meshblocks = testing_Geelong,
+  MoreArgs = list(
+    rt_scat_positivity = rt_scat_positivity_Geelong
+  ),
   SIMPLIFY = FALSE
 )
 
 # combine
-predictions_all <- do.call(bind_rows,predictions)
+# predictions_all <- do.call(bind_rows,predictions)
 predictions_all <- do.call(
   bind_rows,
   predictions
 )
 
 # simplify blocking info, for joining to previous data
-blocking <- predictions_all %>%st_drop_geometry() %>%select(meshblock,  block) %>%distinct()
+# blocking <- predictions_all %>%st_drop_geometry() %>%select(meshblock,  block) %>%distinct()
 blocking <- predictions_all %>%
   st_drop_geometry() %>%
   select(
@@ -223,7 +233,7 @@ blocking <- predictions_all %>%
   distinct()
 
 # calculate empirical incidences from previous year (2018 financial year)
-previous_incidence = meshblock_incidence_seasons %>%st_drop_geometry() %>%dplyr::filter(period == "2018",meshblock %in% predictions_all$meshblock) %>%dplyr::left_join(blocking,by = "meshblock") %>%dplyr::rename(incidence_meshblock_2018 = incidence) %>%dplyr::group_by(block) %>%dplyr::mutate(incidence_block_2018 = sum(cases) / sum(pop)) %>%dplyr::ungroup() %>%dplyr::select(meshblock,incidence_meshblock_2018,incidence_block_2018)
+# previous_incidence = meshblock_incidence_seasons %>%st_drop_geometry() %>%dplyr::filter(period == "2018",meshblock %in% predictions_all$meshblock) %>%dplyr::left_join(blocking,by = "meshblock") %>%dplyr::rename(incidence_meshblock_2018 = incidence) %>%dplyr::group_by(block) %>%dplyr::mutate(incidence_block_2018 = sum(cases) / sum(pop)) %>%dplyr::ungroup() %>%dplyr::select(meshblock,incidence_meshblock_2018,incidence_block_2018)
 previous_incidence = meshblock_incidence_seasons %>%
   st_drop_geometry() %>%
   dplyr::filter(
@@ -251,7 +261,7 @@ previous_incidence = meshblock_incidence_seasons %>%
   )
 
 # get a dataframe of all the predictions to compare
-predictions_to_evaluate <- predictions_all %>%left_join(previous_incidence,by = "meshblock") %>%left_join(survey_period_incidence_multipliers(),by = "period") %>%mutate(annualincidence = incidence / multiplier,pred_annualincidence_model = incidence_pred_mean / multiplier,pred_annualincidence_meshblock2018 = incidence_meshblock_2018,pred_annualincidence_cvblock2018 = incidence_block_2018,) %>%mutate(pred_cases_model = incidence_pred_mean * pop,pred_cases_meshblock2018 = incidence_meshblock_2018 * multiplier * pop,pred_cases_cvblock2018 = incidence_block_2018 * multiplier * pop,) %>%mutate(any = as.numeric(cases > 0),pred_any_model = prob_any_cases(pred_cases_model),pred_any_meshblock2018 = prob_any_cases(pred_cases_meshblock2018),pred_any_cvblock2018 = prob_any_cases(pred_cases_cvblock2018),) %>%pivot_longer(cols = starts_with("pred_"),names_to = c(".value", "prediction"),names_pattern = "(.*)_(.*)") %>%select(period,block,meshblock,cases,annualincidence,any,method = prediction,starts_with("pred")) %>%mutate(method = factor(method,levels = c("model", "meshblock2018", "cvblock2018")))
+# predictions_to_evaluate <- predictions_all %>%left_join(previous_incidence,by = "meshblock") %>%left_join(survey_period_incidence_multipliers(),by = "period") %>%mutate(annualincidence = incidence / multiplier,pred_annualincidence_model = incidence_pred_mean / multiplier,pred_annualincidence_meshblock2018 = incidence_meshblock_2018,pred_annualincidence_cvblock2018 = incidence_block_2018,) %>%mutate(pred_cases_model = incidence_pred_mean * pop,pred_cases_meshblock2018 = incidence_meshblock_2018 * multiplier * pop,pred_cases_cvblock2018 = incidence_block_2018 * multiplier * pop,) %>%mutate(any = as.numeric(cases > 0),pred_any_model = prob_any_cases(pred_cases_model),pred_any_meshblock2018 = prob_any_cases(pred_cases_meshblock2018),pred_any_cvblock2018 = prob_any_cases(pred_cases_cvblock2018),) %>%pivot_longer(cols = starts_with("pred_"),names_to = c(".value", "prediction"),names_pattern = "(.*)_(.*)") %>%select(period,block,meshblock,cases,annualincidence,any,method = prediction,starts_with("pred")) %>%mutate(method = factor(method,levels = c("model", "meshblock2018", "cvblock2018")))
 predictions_to_evaluate <- predictions_all %>%
   left_join(
     previous_incidence,
@@ -304,20 +314,20 @@ predictions_to_evaluate <- predictions_all %>%
   )
   
 
-predictions_to_evaluate %>%dplyr::group_by(method) %>%dplyr::summarise(cor_annualincidence = cor(annualincidence, pred_annualincidence),dev_cases = poisson_deviance(cases, pred_cases),auc_any = Metrics::auc(any, pred_any)) %>%dplyr::arrange(method)
-predictions_to_evaluate %>%
-  dplyr::group_by(method) %>%
-  dplyr::summarise(
-    # 1. correlation in annual incidence
-    cor_annualincidence = cor(annualincidence, pred_annualincidence),
-    # 2. poisson deviance on case counts
-    dev_cases = poisson_deviance(cases, pred_cases),
-    # 3. AUC for presence of any cases
-    auc_any = Metrics::auc(any, pred_any)
-  ) %>%
-  dplyr::arrange(
-    method
-  )
+# predictions_to_evaluate %>%dplyr::group_by(method) %>%dplyr::summarise(cor_annualincidence = cor(annualincidence, pred_annualincidence),dev_cases = poisson_deviance(cases, pred_cases),auc_any = Metrics::auc(any, pred_any)) %>%dplyr::arrange(method)
+# predictions_to_evaluate %>%
+#   dplyr::group_by(method) %>%
+#   dplyr::summarise(
+#     # 1. correlation in annual incidence
+#     cor_annualincidence = cor(annualincidence, pred_annualincidence),
+#     # 2. poisson deviance on case counts
+#     dev_cases = poisson_deviance(cases, pred_cases),
+#     # 3. AUC for presence of any cases
+#     auc_any = Metrics::auc(any, pred_any)
+#   ) %>%
+#   dplyr::arrange(
+#     method
+#   )
 
 
 predictions_to_evaluate %>%
@@ -336,17 +346,17 @@ predictions_to_evaluate %>%
   )
 
 # observed incidence
-fit %>%
-  multidplyr::arrange(incidence) %>%
-  ggplot(
-    aes(
-      colour = incidence
-    )
-  ) +
-  geom_sf() +
-  coord_sf() +
-  scale_colour_distiller(direction = 1) +
-  theme_minimal()
+# fit %>%
+#   multidplyr::arrange(incidence) %>%
+#   ggplot(
+#     aes(
+#       colour = incidence
+#     )
+#   ) +
+#   geom_sf() +
+#   coord_sf() +
+#   scale_colour_distiller(direction = 1) +
+#   theme_minimal()
 
 # predicted incidence
 fit %>%
@@ -367,20 +377,20 @@ ggsave("figures/predicted_incidence.png",
        height = 7)
 
 # whether there were any cases
-fit %>%
-  mutate(
-    any_cases = as.numeric(cases > 0)
-  ) %>%
-  arrange(any_cases) %>%
-  ggplot(
-    aes(
-      colour = any_cases
-    )
-  ) +
-  geom_sf() +
-  coord_sf() +
-  scale_colour_distiller(direction = 1) +
-  theme_minimal()
+# fit %>%
+#   mutate(
+#     any_cases = as.numeric(cases > 0)
+#   ) %>%
+#   arrange(any_cases) %>%
+#   ggplot(
+#     aes(
+#       colour = any_cases
+#     )
+#   ) +
+#   geom_sf() +
+#   coord_sf() +
+#   scale_colour_distiller(direction = 1) +
+#   theme_minimal()
 
 # posterior simulation of the same
 fit %>%
